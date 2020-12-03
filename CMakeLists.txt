@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(curve_speed_planning)
+project(longitudinal_control)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -110,9 +110,9 @@ generate_messages(
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-#  LIBRARIES curve_speed_planning
+#  LIBRARIES longitudinal_control
 #  CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy sensor_msgs std_msgs tf
-#  DEPENDS system_lib
+  DEPENDS Boost
 )
 
 ###########
@@ -126,9 +126,10 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
+add_subdirectory(src/fake_path_publisher)
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/curve_speed_planning.cpp
+#   src/${PROJECT_NAME}/longitudinal_control.cpp
 # )
 
 ## Add cmake target dependencies of the library
@@ -141,7 +142,7 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(
   ${PROJECT_NAME}_node 
-  src/curve_speed_planning_node.cpp 
+  src/longitudinal_control_node.cpp 
   src/curve_speed_planning.cpp
 )
 

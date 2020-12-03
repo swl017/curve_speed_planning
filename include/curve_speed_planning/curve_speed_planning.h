@@ -9,6 +9,8 @@
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 
+namespace longitudinal_control
+{
 class curve_speed_planning
 {
 public:
@@ -24,7 +26,8 @@ public:
     // Get speed profile with a_lat, a_lon taken into account
     void getSpeedProfile(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile_array);
     // void getSpeedProfile(double current_speed, std::vector<std::vector<double>> xy_wpt_array, std::vector<double> &speed_profile_array);
-    double getSpeedCommand(double current_speed, const nav_msgs::PathConstPtr &path);
+    void getConstAccelSpeed(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &curve_speed_profile, std::vector<double> &speed_profile);
+    double getSpeedCommand(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile);
     // double getSpeedCommand(double current_speed, std::vector<std::vector<double>> xy_wpt_array, double speed_command);
 
     double getDistBtwPoints(geometry_msgs::PoseStamped pose_from, geometry_msgs::PoseStamped pose_to);
@@ -32,11 +35,13 @@ public:
     void getDistBtwPoints(geometry_msgs::PoseStamped pose_from, std::vector<double> pose_to, double distance, double signed_distance);
     // void getDistBtwPoints(std::vector<double> xy_wpt_from, std::vector<double> xy_wpt_to, double distance, double signed_distance);
 
+    void getCurveSpeedArray(const nav_msgs::PathConstPtr &path, std::vector<double> &curvature_speed_profile);
     double getCurveSpeed(geometry_msgs::PoseStamped pose_i_m_1, geometry_msgs::PoseStamped pose_i, geometry_msgs::PoseStamped pose_i_p_1);
     // double getCurveSpeed(std::vector<double> xy_wpt_1, std::vector<double> xy_wpt_2, std::vector<double> xy_wpt_3);
 
     void getPredictionByTime(double current_speed, nav_msgs::PathConstPtr &path, double time_to_be_predicted, geometry_msgs::PoseStamped &predicted_ego_xy);
     // void getPredictionByTime(double current_speed, std::vector<std::vector<double>> xy_wpt_array, double time_tobe_predicted, std::vector<double> &predicted_ego_xy);
+    double imposeSpeedLimit(double speed1, double speed2);
 
 private:
     double max_speed_, current_speed_, speed_command_; // m/s
@@ -46,10 +51,19 @@ private:
     bool use_current_speed_;
     double longi_time_const_;
 
+    std::vector<double> speed_profile_;
+    std::vector<double> curve_speed_profile_;
+
     ros::Subscriber path_sub_;
     ros::Subscriber ego_state_sub_;
 
     ros::Publisher speed_command_pub_;
     ros::Publisher speed_plan_pub_;
+    ros::Publisher curve_speed_plan_pub_;
+    
+    double lpf_dt_   = 0.01;
+    double lpf_f_    = 100;
+    double lpf_init_ = 0;
+    
 };
-
+}
