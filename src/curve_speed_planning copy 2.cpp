@@ -1,14 +1,11 @@
 /*
- * @file   curve_speed_planning.cpp
- * @author Seungwook Lee
- * @date   2020-10-16, (revised) 2020-12-01
- * @brief  class implementation of waypoint curvature based speed planning
- * @arg    input      : Path, Odometry(ego state)(optional)
- *         output     : speed command, planned speed array(optional)
- *         parameters : acceleration limits, longitudinal time lag, max speed.
- * 
- * @note   ***IMPORTANT ASSUMPTION***
- *         Path should start from behind of or right next to ego vehicle.
+ * @file    curve_speed_planning.cpp
+ * @author  Seungwook Lee
+ * @date    2020-10-16, (revised) 2020-12-01
+ * @brief   class implementation of waypoint curvature based speed planning
+ * @arg     input:
+ *          output:
+ * @usages
  * 
  */
 
@@ -40,9 +37,9 @@ curve_speed_planning::curve_speed_planning()
     path_sub_      = nh.subscribe("Path/LocalWaypoint/OnBody", 1, &curve_speed_planning::pathSubCallback, this); // DK CHECK
     ego_state_sub_ = nh.subscribe("Odometry", 1, &curve_speed_planning::egoStateSubCallback, this); // DK CHECK
 
-    speed_command_pub_    = nh.advertise<std_msgs::Float64>("speed_command", 1); // DK CHECK
-    speed_plan_pub_       = nh.advertise<std_msgs::Float64MultiArray>("speed_plan", 1); // DK CHECK
-    curve_speed_plan_pub_ = nh.advertise<std_msgs::Float64MultiArray>("curve_speed_plan", 1); // DK CHECK
+    speed_command_pub_ = nh.advertise<std_msgs::Float64>("speed_command", 1); // DK CHECK
+    speed_plan_pub_    = nh.advertise<std_msgs::Float64MultiArray>("speed_plan", 1); // DK CHECK
+    curve_speed_plan_pub_    = nh.advertise<std_msgs::Float64MultiArray>("curve_speed_plan", 1); // DK CHECK
 
 }
 
@@ -83,7 +80,7 @@ void curve_speed_planning::egoStateSubCallback(const nav_msgs::OdometryConstPtr 
 double curve_speed_planning::getSpeedCommand(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile)
 {
     getSpeedProfile(current_speed, path, speed_profile);
-    double speed_command = compensateLag(current_speed, path, speed_profile);
+    compensateLag(current_speed, path, speed_profile);
 
     return speed_command;
 }
@@ -94,7 +91,7 @@ double curve_speed_planning::compensateLag(double current_speed, const nav_msgs:
     double accum_dist_btw_waypoints = 0;
     double last_accum_dist_btw_waypoints = 0;
     int num_of_waypoints = path->poses.size();
-    // compensate for longitudinal lag (s)
+    // compensate for longitudinal lag
     delay_in_meters = longi_time_const_ * current_speed;
     int i = 0;
     for(i = 0; i < num_of_waypoints - 2; i++){
@@ -107,67 +104,56 @@ double curve_speed_planning::compensateLag(double current_speed, const nav_msgs:
     // interpolate
     double interpolate_ratio = 0;
     if(accum_dist_btw_waypoints - last_accum_dist_btw_waypoints > 0){
-        interpolate_ratio = (delay_in_meters - last_accum_dist_btw_waypoints)
-                            / (accum_dist_btw_waypoints - last_accum_dist_btw_waypoints);
+        interpolate_ratio = (delay_in_meters - last_accum_dist_btw_waypoints) / (accum_dist_btw_waypoints - last_accum_dist_btw_waypoints);
     }
     double compensated_speed_command = speed_profile[i] * interpolate_ratio
-                                        + speed_profile[i+1] * (1 - interpolate_ratio);
+                    + speed_profile[i+1] * (1 - interpolate_ratio);
 
     return compensated_speed_command;
 }
 
+// void curve_speed_planning::getSpeedProfile(double current_speed, std::vector<std::vector<double>> xy_wpt_array, std::vector<double> &speed_profile_return)
 void curve_speed_planning::getSpeedProfile(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile_return)
 {
+    bool use_current_speed = use_current_speed_;
     int num_of_waypoints = path->poses.size();
     double curve_speed  = 0.0;
     double dist_btw_wpt = 0.0;
     double v_accel      = 0.0;
     double v_deccel     = 0.0;
-
     std::vector<double> speed_profile_array(num_of_waypoints, 0.0);
     std::vector<double> curve_speed_profile(num_of_waypoints, 0.0);
     std::vector<double> lpf_curve_speed_profile(num_of_waypoints, 0.0);
-
     getCurveSpeedArray(path, curve_speed_profile);
     low_pass_filter lpf = low_pass_filter(lpf_dt_, lpf_f_, lpf_init_);
     lpf.getFilteredArray(curve_speed_profile,lpf_curve_speed_profile);
     getConstAccelSpeed(current_speed, path, lpf_curve_speed_profile, speed_profile_array);
-
     curve_speed_profile_ = lpf_curve_speed_profile;
     speed_profile_return = speed_profile_array;
 }
 
 void curve_speed_planning::getConstAccelSpeed(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &curve_speed_profile, std::vector<double> &speed_profile)
 {
-    // Calculate a speed profile with longitudinal acceleration limits.
-    // parameter: A_LON_MAX_, A_LON_MIN_, use_current_speed_(optional)
-    int length = path->poses.size();
-    ROS_INFO("path size %d", length);
+    ROS_INFO("path size %d",path->poses.size());
     std::vector<double> dist_btw_wpt(path->poses.size()-1, 0.0);
     if(use_current_speed_ == true){
         curve_speed_profile[0] = current_speed;
     }
     for(int i = 0; i < dist_btw_wpt.size(); i++){
-        dist_btw_wpt[i] = getDistBtwPoints(path->poses[i], path->poses[i+1]);
+        double x_1 = path->poses[i+1].pose.position.x;
+        double x_0 = path->poses[i].pose.position.x;
+        double y_1 = path->poses[i+1].pose.position.y;
+        double y_0 = path->poses[i].pose.position.y;
+        dist_btw_wpt[i] = sqrt(pow(x_1 - x_0, 2.0) + pow(y_1 - y_0, 2.0));
         std::cout << dist_btw_wpt[i] <<std::endl;
     }
     for(int i = 1; i < curve_speed_profile.size(); i++){
-        int j = curve_speed_profile.size() - i -1; // j from array_length-2 to 0
+        int j = curve_speed_profile.size() - i -1;
         double v_cdec = sqrt(pow(curve_speed_profile[j+1],2) - 2*A_LON_MIN_*dist_btw_wpt[j]);
         speed_profile[j] = std::min(curve_speed_profile[j], v_cdec);
     }
     for(int i = 1; i < curve_speed_profile.size(); i++){
-        int j = i; // j from 1 to array_length-1
-        /* *** Constant acceleration formula ***
-         *    
-         *       2*a*s = (v)^2 - (v_0)^2
-         *    
-         *    where
-         *    s   : travel distance from t_0 to t
-         *    v   : longitudinal speed at t
-         *    v_0 : longitudinal speed at t_0
-         *    a   : assumed constant acceleration
-         */
+        int j = i;
         double v_cacc = sqrt(pow(curve_speed_profile[j-1],2) + 2*A_LON_MAX_*dist_btw_wpt[j-1]);
         speed_profile[j] = std::min(speed_profile[j], v_cacc);
     }
@@ -175,20 +161,18 @@ void curve_speed_planning::getConstAccelSpeed(double current_speed, const nav_ms
 
 void curve_speed_planning::getCurveSpeedArray(const nav_msgs::PathConstPtr &path, std::vector<double> &curvature_speed_profile)
 {
-    // Iterate getCurveSpeed to get speed for each point in path.
     std::vector<double> vec(path->poses.size(),0.0);
     for(int i = 1; i < path->poses.size()-1; i++){
         vec[i] = getCurveSpeed(path->poses[i-1], path->poses[i], path->poses[i+1]);
     }
     vec[0] = vec[1];
     vec[path->poses.size()-1] = vec[path->poses.size()-2];
+    // vec[path->poses.size()] = vec[path->poses.size()-1];
     curvature_speed_profile = vec;
 }
 
 double curve_speed_planning::getCurveSpeed(geometry_msgs::PoseStamped pose_i_m_1, geometry_msgs::PoseStamped pose_i, geometry_msgs::PoseStamped pose_i_p_1)
 {
-    // Calcalate curvature of a line with discrete points(3)
-    // parameter: A_LAT_MAX_
     double x_1 = pose_i_m_1.pose.position.x;
     double x_2 = pose_i.pose.position.x;
     double x_3 = pose_i_p_1.pose.position.x;
@@ -221,12 +205,7 @@ double curve_speed_planning::getCurveSpeed(geometry_msgs::PoseStamped pose_i_m_1
             curvature = abs(x_d * y_dd - y_d * x_dd) / pow(sqrt(x_d*x_d + y_d*y_d), 3.0);
         }
     }
-    /* *** Curve speed formula ***
-     *
-     *   v = sqrt(a_lat / kappa)
-     *     = sqrt(a_lat * R)
-     * 
-     */
+
     double curve_speed = sqrt(A_LAT_MAX_ / curvature);
 
     curve_speed = imposeSpeedLimit(curve_speed, max_speed_);
@@ -247,4 +226,33 @@ double curve_speed_planning::getDistBtwPoints(geometry_msgs::PoseStamped pose_fr
     return sqrt(dx*dx + dy*dy);
 }
 
+// void curve_speed_planning::getPredictionByTime(double current_speed, std::vector<std::vector<double>> xy_wpt_array, double time_tobe_predicted, std::vector<double> &predicted_ego_xy)
+// {
+//     predicted_ego_xy.clear();
+//     std::vector<double> speed_profile_array;
+//     getSpeedProfile(current_speed, xy_wpt_array, speed_profile_array);
+
+//     bool solution_found = false;
+//     double temp_accum_time = 0;
+//     double last_temp_accum_time = 0;
+//     int num_of_waypoints = xy_wpt_array.size();
+//     int index = 0;
+//     for(index = 0; index < num_of_waypoints - 1; index++){
+//         temp_accum_time += getDistBtwPoints(xy_wpt_array[index], xy_wpt_array[index+1]) / std::max(speed_profile_array[index],0.1);
+//         if(time_tobe_predicted - temp_accum_time < 0){
+//             solution_found = true;
+//             break;
+//         }
+//         last_temp_accum_time = temp_accum_time;
+//     }
+//     if(solution_found == true && last_temp_accum_time - temp_accum_time != 0){
+//         double interpolate_weight = (time_tobe_predicted - last_temp_accum_time) / (last_temp_accum_time - temp_accum_time);
+//         predicted_ego_xy.push_back(interpolate_weight * xy_wpt_array[index][0] + (1 - interpolate_weight) * xy_wpt_array[index+1][0]);
+//         predicted_ego_xy.push_back(interpolate_weight * xy_wpt_array[index][1] + (1 - interpolate_weight) * xy_wpt_array[index+1][1]);
+//     }
+//     else{
+//         predicted_ego_xy.push_back(xy_wpt_array[index][0]);
+//         predicted_ego_xy.push_back(xy_wpt_array[index][1]);
+//     }
+// }
 }

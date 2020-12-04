@@ -20,21 +20,27 @@ public:
     void pathSubCallback(const nav_msgs::PathConstPtr &msg);
     void egoStateSubCallback(const nav_msgs::OdometryConstPtr &msg);
 
-    double getSpeedCommand(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile);
+    // Specify (x, y) to get a smooth stop there.
+    void assignZeroSpeedAtXY(double x, double y);
+
+    // Get speed profile with a_lat, a_lon taken into account
     void getSpeedProfile(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile_array);
     void getConstAccelSpeed(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &curve_speed_profile, std::vector<double> &speed_profile);
-    double compensateLag(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile);
+    double getSpeedCommand(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile);
+    double compensateLag(double current_speed, const nav_msgs::PathConstPtr &path, std::vector<double> &speed_profile)
+
+    double getDistBtwPoints(geometry_msgs::PoseStamped pose_from, geometry_msgs::PoseStamped pose_to);
+    void getDistBtwPoints(geometry_msgs::PoseStamped pose_from, std::vector<double> pose_to, double distance, double signed_distance);
 
     void getCurveSpeedArray(const nav_msgs::PathConstPtr &path, std::vector<double> &curvature_speed_profile);
     double getCurveSpeed(geometry_msgs::PoseStamped pose_i_m_1, geometry_msgs::PoseStamped pose_i, geometry_msgs::PoseStamped pose_i_p_1);
 
+    void getPredictionByTime(double current_speed, nav_msgs::PathConstPtr &path, double time_to_be_predicted, geometry_msgs::PoseStamped &predicted_ego_xy);
     double imposeSpeedLimit(double speed1, double speed2);
-    double getDistBtwPoints(geometry_msgs::PoseStamped pose_from, geometry_msgs::PoseStamped pose_to);
-    void getDistBtwPoints(geometry_msgs::PoseStamped pose_from, std::vector<double> pose_to, double distance, double signed_distance);
 
 private:
-    double max_speed_, current_speed_, speed_command_; // (m/s)
-    double A_LAT_MAX_, A_LAT_MIN_; // (m/s^2)
+    double max_speed_, current_speed_, speed_command_; //<< m/s
+    double A_LAT_MAX_, A_LAT_MIN_; //<< m/s^2
     double A_LON_MAX_, A_LON_MIN_;
     double CURVATURE_MINIMUM_ = 0.000001;
         
